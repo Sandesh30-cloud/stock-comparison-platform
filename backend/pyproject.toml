@@ -1,0 +1,11 @@
+[project]
+name = "stock-analysis-backend"
+version = "0.1.0"
+description = "Stock Comparison & Analysis Platform Backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.128.1",
+    "yfinance>=0.2.40",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0"
+]
