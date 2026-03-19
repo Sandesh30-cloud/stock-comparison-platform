@@ -89,9 +89,9 @@ function MetricCard({ label, value, format }: { label: string; value: number | n
   const formatValue = format || ((v: number) => v.toFixed(2))
   
   return (
-    <div className="bg-muted/50 rounded-lg p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-mono font-medium">
+    <div className="bg-muted/50 rounded-xl p-4 border border-border/50">
+      <p className="text-xs text-muted-foreground font-medium">{label}</p>
+      <p className="font-mono font-semibold mt-1 tabular-nums">
         {value !== null ? formatValue(value) : 'N/A'}
       </p>
     </div>
@@ -177,7 +177,7 @@ export function Recommendation({ symbols }: RecommendationProps) {
         {/* Recommendation Badges */}
         <div className="grid gap-4 md:grid-cols-2">
           {/* Long Term */}
-          <div className="border rounded-lg p-4">
+          <div className="border border-border/50 rounded-xl p-5 bg-card">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <TrendingUp className="size-5 text-muted-foreground" />
@@ -201,7 +201,7 @@ export function Recommendation({ symbols }: RecommendationProps) {
           </div>
 
           {/* Short Term */}
-          <div className="border rounded-lg p-4">
+          <div className="border border-border/50 rounded-xl p-5 bg-card">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <TrendingDown className="size-5 text-muted-foreground" />

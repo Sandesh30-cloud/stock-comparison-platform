@@ -25,11 +25,11 @@ interface StockSearchProps {
   maxStocks?: number
 }
 
-export function StockSearch({ 
-  selectedStocks, 
-  onAddStock, 
+export function StockSearch({
+  selectedStocks,
+  onAddStock,
   onRemoveStock,
-  maxStocks = 5 
+  maxStocks = 5
 }: StockSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<StockResult[]>([])
@@ -47,8 +47,26 @@ export function StockSearch({
 
     try {
       const response = await fetch(`/api/search-stock?query=${encodeURIComponent(searchQuery)}`)
-      const data = await response.json()
-      
+      let data: { error?: string; results?: StockResult[] }
+      try {
+        data = await response.json()
+      } catch {
+        if (!response.ok) {
+          setError('Backend unavailable. Run: cd backend && python3 -m uvicorn main:app --reload --port 8000')
+          setResults([])
+          return
+        }
+        setError('Invalid response from server')
+        setResults([])
+        return
+      }
+
+      if (!response.ok) {
+        setError('Backend unavailable. Run: cd backend && python3 -m uvicorn main:app --reload --port 8000')
+        setResults([])
+        return
+      }
+
       if (data.error) {
         setError(data.error)
         setResults([])
@@ -56,7 +74,7 @@ export function StockSearch({
         setResults(data.results || [])
       }
     } catch (err) {
-      setError('Failed to search stocks')
+      setError('Backend unavailable. Run: cd backend && python3 -m uvicorn main:app --reload --port 8000')
       setResults([])
     } finally {
       setIsLoading(false)
@@ -82,20 +100,20 @@ export function StockSearch({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Selected Stocks */}
       {selectedStocks.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 justify-center">
           {selectedStocks.map((symbol) => (
             <Badge
               key={symbol}
               variant="secondary"
-              className="gap-1.5 py-1.5 px-3 text-sm"
+              className="gap-2 py-2 px-4 text-sm font-medium rounded-lg bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
             >
               {symbol}
               <button
                 onClick={() => onRemoveStock(symbol)}
-                className="ml-1 hover:text-destructive transition-colors"
+                className="ml-0.5 hover:text-destructive transition-colors rounded p-0.5"
                 aria-label={`Remove ${symbol}`}
               >
                 <X className="size-3.5" />
@@ -103,80 +121,92 @@ export function StockSearch({
             </Badge>
           ))}
           {selectedStocks.length >= 2 && (
-            <Badge variant="outline" className="py-1.5 px-3 text-sm text-muted-foreground">
-              {selectedStocks.length}/{maxStocks} stocks selected
+            <Badge variant="outline" className="py-2 px-4 text-sm text-muted-foreground rounded-lg">
+              {selectedStocks.length}/{maxStocks} selected
             </Badge>
           )}
         </div>
       )}
 
-      {/* Search Input */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+      {/* Search Input - Glass style */}
+      <div className="flex gap-3">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
-            placeholder="Search by stock symbol (e.g., AAPL, MSFT, GOOGL)"
+            placeholder="Search by symbol (e.g., AAPL, MSFT, GOOGL)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="pl-10"
+            className="pl-12 h-12 rounded-xl border-border/50 bg-muted/30 focus:bg-background transition-colors text-base font-medium"
           />
         </div>
-        <Button onClick={handleSearch} disabled={isLoading || !query.trim()}>
-          {isLoading ? <Loader2 className="size-4 animate-spin" /> : 'Search'}
+        <Button
+          onClick={handleSearch}
+          disabled={isLoading || !query.trim()}
+          className="h-12 px-6 rounded-xl font-semibold shadow-lg shadow-primary/20"
+        >
+          {isLoading ? <Loader2 className="size-5 animate-spin" /> : 'Search'}
         </Button>
       </div>
 
       {/* Error Message */}
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-sm text-destructive flex items-center justify-center gap-2">
+          {error}
+        </p>
       )}
 
       {/* Search Results */}
       {results.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {results.map((stock) => (
-            <Card key={stock.symbol} className="py-3">
-              <CardContent className="flex items-center justify-between">
+            <Card
+              key={stock.symbol}
+              className="py-4 rounded-xl border-border/50 hover:border-primary/30 hover:bg-muted/20 transition-all"
+            >
+              <CardContent className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{stock.symbol}</span>
-                    <Badge variant="outline" className="text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-lg tabular-nums">{stock.symbol}</span>
+                    <Badge variant="outline" className="text-xs rounded-md">
                       {stock.sector || 'N/A'}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground truncate">
+                  <p className="text-sm text-muted-foreground truncate mt-0.5">
                     {stock.name}
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="font-mono font-medium">
+                    <p className="font-mono font-semibold text-lg tabular-nums">
                       ${stock.price?.toFixed(2) || 'N/A'}
                     </p>
                     {stock.change !== null && (
-                      <p className={cn(
-                        "text-sm flex items-center justify-end gap-1",
-                        stock.change >= 0 ? "text-success" : "text-destructive"
-                      )}>
+                      <p
+                        className={cn(
+                          'text-sm flex items-center justify-end gap-1 font-medium tabular-nums',
+                          stock.change >= 0 ? 'text-success' : 'text-destructive'
+                        )}
+                      >
                         {stock.change >= 0 ? (
-                          <TrendingUp className="size-3" />
+                          <TrendingUp className="size-4" />
                         ) : (
-                          <TrendingDown className="size-3" />
+                          <TrendingDown className="size-4" />
                         )}
                         {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
                       </p>
                     )}
                   </div>
-                  <div className="text-right text-sm text-muted-foreground">
-                    <p>Market Cap</p>
-                    <p className="font-medium text-foreground">
+                  <div className="text-right text-sm">
+                    <p className="text-muted-foreground">Market Cap</p>
+                    <p className="font-semibold tabular-nums">
                       {formatMarketCap(stock.marketCap)}
                     </p>
                   </div>
                   <Button
                     size="sm"
-                    variant={selectedStocks.includes(stock.symbol) ? "secondary" : "default"}
+                    variant={selectedStocks.includes(stock.symbol) ? 'secondary' : 'default'}
+                    className="rounded-lg font-medium"
                     onClick={() => {
                       if (selectedStocks.includes(stock.symbol)) {
                         onRemoveStock(stock.symbol)
@@ -185,7 +215,7 @@ export function StockSearch({
                       }
                     }}
                     disabled={
-                      !selectedStocks.includes(stock.symbol) && 
+                      !selectedStocks.includes(stock.symbol) &&
                       selectedStocks.length >= maxStocks
                     }
                   >

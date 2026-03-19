@@ -21,12 +21,13 @@ const PERIODS = [
   { label: '5Y', value: '5y' },
 ]
 
+// High-contrast colors for dark mode visibility
 const COLORS = [
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
+  '#14b8a6', // Teal
+  '#f43f5e', // Rose
+  '#3b82f6', // Blue
+  '#f59e0b', // Amber
+  '#8b5cf6', // Purple
 ]
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -107,19 +108,20 @@ export function PriceChart({ symbols }: PriceChartProps) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Price Comparison</CardTitle>
             <CardDescription>
               Normalized price change over time (%)
             </CardDescription>
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 p-1 rounded-lg bg-muted/50 border border-border/50 w-fit">
             {PERIODS.map((p) => (
               <Button
                 key={p.value}
                 size="sm"
                 variant={period === p.value ? 'default' : 'ghost'}
+                className="rounded-md"
                 onClick={() => setPeriod(p.value)}
               >
                 {p.label}
@@ -129,10 +131,10 @@ export function PriceChart({ symbols }: PriceChartProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-[400px] w-full">
+        <div className="h-[420px] w-full -mx-2">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={normalizedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <LineChart data={normalizedData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
               <XAxis 
                 dataKey="date" 
                 tick={{ fontSize: 12 }}
@@ -149,11 +151,11 @@ export function PriceChart({ symbols }: PriceChartProps) {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--popover))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
+                  backgroundColor: 'oklch(var(--popover))',
+                  border: '1px solid oklch(var(--border))',
+                  borderRadius: '12px',
                 }}
-                labelStyle={{ color: 'hsl(var(--foreground))' }}
+                labelStyle={{ color: 'oklch(var(--foreground))' }}
                 formatter={(value: number) => [`${value.toFixed(2)}%`, '']}
                 labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', {
                   year: 'numeric',
@@ -161,16 +163,16 @@ export function PriceChart({ symbols }: PriceChartProps) {
                   day: 'numeric'
                 })}
               />
-              <Legend />
+              <Legend wrapperStyle={{ paddingTop: 16 }} iconType="circle" iconSize={10} />
               {symbols.map((symbol, index) => (
                 <Line
                   key={symbol}
                   type="monotone"
                   dataKey={symbol}
                   stroke={COLORS[index % COLORS.length]}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
+                  strokeWidth={3}
+                  dot={{ r: 3, fill: COLORS[index % COLORS.length], strokeWidth: 0 }}
+                  activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
                 />
               ))}
             </LineChart>

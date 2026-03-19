@@ -145,16 +145,16 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
           Side-by-side comparison of key financial metrics
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[180px]">Metric</TableHead>
+            <TableRow className="border-border/50">
+              <TableHead className="w-[180px] text-muted-foreground font-medium">Metric</TableHead>
               {stocks.map((stock) => (
                 <TableHead key={stock.symbol} className="text-center min-w-[140px]">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="font-bold">{stock.symbol}</span>
-                    <Badge variant="outline" className="text-xs font-normal">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="font-bold text-base">{stock.symbol}</span>
+                    <Badge variant="outline" className="text-xs font-normal rounded-md">
                       {stock.sector || 'N/A'}
                     </Badge>
                   </div>
@@ -189,8 +189,8 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
                     <TableCell 
                       key={stock.symbol} 
                       className={cn(
-                        "text-center font-mono",
-                        isBest && "bg-success/10"
+                        "text-center font-mono tabular-nums",
+                        isBest && "bg-success/10 rounded-lg"
                       )}
                     >
                       <div className="flex items-center justify-center gap-1.5">

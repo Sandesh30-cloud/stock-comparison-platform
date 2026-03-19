@@ -139,7 +139,7 @@ export function FinancialsView({ symbols }: FinancialsViewProps) {
       </CardHeader>
       <CardContent>
         <Tabs value={statementType} onValueChange={(v) => setStatementType(v as any)}>
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 w-fit">
             <TabsTrigger value="income">Income Statement</TabsTrigger>
             <TabsTrigger value="balance">Balance Sheet</TabsTrigger>
             <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>

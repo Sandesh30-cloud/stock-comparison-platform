@@ -1,3 +1,4 @@
+import asyncio
 import fastapi
 import fastapi.middleware.cors
 from typing import Optional
@@ -50,49 +51,56 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _search_stock_sync(query: str) -> dict:
+    """Synchronous stock search (runs in thread pool)"""
+    ticker = yf.Ticker(query.upper())
+    info = ticker.info
+
+    if not info or info.get("regularMarketPrice") is None:
+        suffixes = ["", ".NS", ".BO", ".L", ".TO"]
+        results = []
+        for suffix in suffixes:
+            try:
+                test_ticker = yf.Ticker(f"{query.upper()}{suffix}")
+                test_info = test_ticker.info
+                if test_info and test_info.get("regularMarketPrice"):
+                    results.append({
+                        "symbol": f"{query.upper()}{suffix}",
+                        "name": safe_get(test_info, "longName", query.upper()),
+                        "sector": safe_get(test_info, "sector", "N/A"),
+                        "industry": safe_get(test_info, "industry", "N/A"),
+                        "marketCap": safe_get(test_info, "marketCap"),
+                        "price": safe_get(test_info, "regularMarketPrice"),
+                        "change": safe_get(test_info, "regularMarketChangePercent"),
+                    })
+            except Exception:
+                continue
+        return {"results": results}
+
+    return {
+        "results": [{
+            "symbol": query.upper(),
+            "name": safe_get(info, "longName", query.upper()),
+            "sector": safe_get(info, "sector", "N/A"),
+            "industry": safe_get(info, "industry", "N/A"),
+            "marketCap": safe_get(info, "marketCap"),
+            "price": safe_get(info, "regularMarketPrice"),
+            "change": safe_get(info, "regularMarketChangePercent"),
+        }]
+    }
+
+
 @app.get("/search-stock")
 async def search_stock(query: str):
     """Search for stocks by name or symbol"""
     try:
-        # Use yfinance to search for tickers
-        ticker = yf.Ticker(query.upper())
-        info = ticker.info
-        
-        if not info or info.get("regularMarketPrice") is None:
-            # Try common suffixes for international markets
-            suffixes = ["", ".NS", ".BO", ".L", ".TO"]
-            results = []
-            
-            for suffix in suffixes:
-                try:
-                    test_ticker = yf.Ticker(f"{query.upper()}{suffix}")
-                    test_info = test_ticker.info
-                    if test_info and test_info.get("regularMarketPrice"):
-                        results.append({
-                            "symbol": f"{query.upper()}{suffix}",
-                            "name": safe_get(test_info, "longName", query.upper()),
-                            "sector": safe_get(test_info, "sector", "N/A"),
-                            "industry": safe_get(test_info, "industry", "N/A"),
-                            "marketCap": safe_get(test_info, "marketCap"),
-                            "price": safe_get(test_info, "regularMarketPrice"),
-                            "change": safe_get(test_info, "regularMarketChangePercent"),
-                        })
-                except:
-                    continue
-            
-            return {"results": results}
-        
-        return {
-            "results": [{
-                "symbol": query.upper(),
-                "name": safe_get(info, "longName", query.upper()),
-                "sector": safe_get(info, "sector", "N/A"),
-                "industry": safe_get(info, "industry", "N/A"),
-                "marketCap": safe_get(info, "marketCap"),
-                "price": safe_get(info, "regularMarketPrice"),
-                "change": safe_get(info, "regularMarketChangePercent"),
-            }]
-        }
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_search_stock_sync, query),
+            timeout=15.0,
+        )
+        return result
+    except asyncio.TimeoutError:
+        return {"results": [], "error": "Search timed out. Try a different symbol."}
     except Exception as e:
         return {"results": [], "error": str(e)}
 

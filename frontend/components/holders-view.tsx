@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LabelList } from 'recharts'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -31,10 +31,11 @@ interface HolderData {
   error?: string
 }
 
+// High-contrast colors for dark mode visibility
 const COLORS = [
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-4))',
+  '#14b8a6', // Teal - Institutional
+  '#f43f5e', // Rose - Insider
+  '#f59e0b', // Amber - Retail & Other
 ]
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -77,23 +78,17 @@ export function HoldersView({ symbols }: HoldersViewProps) {
     )
   }
 
+  const instPercent = (data?.institutionalHolding ?? 0) * 100
+  const insiderPercent = (data?.insiderHolding ?? 0) * 100
+  const retailPercent = Math.max(0, 100 - instPercent - insiderPercent)
+
   const holdingData = [
-    {
-      name: 'Institutional',
-      value: (data?.institutionalHolding || 0) * 100,
-      color: COLORS[0],
-    },
-    {
-      name: 'Insider',
-      value: (data?.insiderHolding || 0) * 100,
-      color: COLORS[1],
-    },
-    {
-      name: 'Retail & Other',
-      value: 100 - ((data?.institutionalHolding || 0) * 100) - ((data?.insiderHolding || 0) * 100),
-      color: COLORS[2],
-    },
-  ]
+    { name: 'Institutional', value: instPercent, color: COLORS[0] },
+    { name: 'Insider', value: insiderPercent, color: COLORS[1] },
+    { name: 'Retail & Other', value: retailPercent, color: COLORS[2] },
+  ].filter((d) => d.value > 0.1) // Hide near-zero segments for clarity
+
+  const hasHoldingData = holdingData.length > 0
 
   return (
     <Card>
@@ -124,35 +119,81 @@ export function HoldersView({ symbols }: HoldersViewProps) {
           {/* Pie Chart */}
           <div>
             <h4 className="font-medium mb-4">Ownership Distribution</h4>
-            <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={holdingData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {holdingData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number) => [`${value.toFixed(2)}%`, '']}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            
+            {hasHoldingData ? (
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={holdingData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={100}
+                      paddingAngle={3}
+                      dataKey="value"
+                      minAngle={5}
+                    >
+                      {holdingData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.color}
+                          stroke="#334155"
+                          strokeWidth={2}
+                        >
+                          <LabelList
+                            dataKey="value"
+                            position="outside"
+                            formatter={(v: number) => `${v.toFixed(1)}%`}
+                            style={{ fill: '#f8fafc', fontSize: 13, fontWeight: 600 }}
+                          />
+                        </Cell>
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        color: '#f8fafc',
+                      }}
+                      formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name]}
+                      labelFormatter={(label) => ''}
+                    />
+                    <Legend
+                      iconType="circle"
+                      iconSize={14}
+                      wrapperStyle={{ paddingTop: 16 }}
+                      formatter={(value, entry: { payload?: { value?: number } }) => (
+                        <span className="text-foreground text-sm">
+                          {value}: {(entry?.payload?.value ?? 0).toFixed(1)}%
+                        </span>
+                      )}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[320px] flex items-center justify-center rounded-lg border border-dashed border-border/50 bg-muted/20">
+                <p className="text-sm text-muted-foreground">No ownership data available</p>
+              </div>
+            )}
+
+            {/* Summary breakdown */}
+            {hasHoldingData && (
+              <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                {holdingData.map((d) => (
+                  <div key={d.name} className="flex items-center gap-2">
+                    <span
+                      className="size-3 rounded-full shrink-0"
+                      style={{ backgroundColor: d.color }}
+                    />
+                    <span className="text-muted-foreground">{d.name}:</span>
+                    <span className="font-semibold tabular-nums">{d.value.toFixed(1)}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Major Holders Summary */}
             {data?.majorHolders && data.majorHolders.length > 0 && (
               <div className="mt-4 space-y-2">
