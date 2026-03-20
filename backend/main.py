@@ -46,6 +46,64 @@ def format_number(value, decimals=2):
     return value
 
 
+def get_debt_to_equity(info: dict):
+    """Return debt-to-equity as a ratio, not a percentage-scaled vendor value."""
+    total_equity = safe_get(info, "totalStockholderEquity")
+    total_debt = safe_get(info, "totalDebt")
+
+    if total_debt is not None and total_equity and total_equity != 0:
+        return round(total_debt / total_equity, 2)
+
+    raw_debt_to_equity = safe_get(info, "debtToEquity")
+    if raw_debt_to_equity is None:
+        return None
+
+    normalized = raw_debt_to_equity / 100 if raw_debt_to_equity > 10 else raw_debt_to_equity
+    return round(normalized, 2)
+
+
+def get_dividend_yield(info: dict):
+    """Return dividend yield as a decimal fraction for consistent frontend formatting."""
+    trailing_yield = safe_get(info, "trailingAnnualDividendYield")
+    if trailing_yield is not None:
+        normalized = trailing_yield / 100 if trailing_yield > 1 else trailing_yield
+        return round(normalized, 4)
+
+    dividend_rate = safe_get(info, "trailingAnnualDividendRate")
+    if dividend_rate is None:
+        dividend_rate = safe_get(info, "dividendRate")
+
+    price = safe_get(info, "currentPrice")
+    if price is None:
+        price = safe_get(info, "regularMarketPrice")
+
+    if dividend_rate is not None and price not in (None, 0):
+        return round(dividend_rate / price, 4)
+
+    dividend_yield = safe_get(info, "dividendYield")
+    if dividend_yield is None:
+        return None
+
+    normalized = dividend_yield / 100
+    return round(normalized, 4)
+
+
+def get_roe(info: dict):
+    """Return ROE as a percentage, normalizing vendor values when needed."""
+    net_income = safe_get(info, "netIncomeToCommon")
+    total_equity = safe_get(info, "totalStockholderEquity")
+
+    if net_income is not None and total_equity and total_equity != 0:
+        return round((net_income / total_equity) * 100, 2)
+
+    raw_roe = safe_get(info, "returnOnEquity")
+    if raw_roe is None:
+        return None
+
+    normalized = raw_roe * 100 if abs(raw_roe) <= 1 else raw_roe
+    return round(normalized, 2)
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -133,7 +191,7 @@ async def get_stock_info(symbol: str):
             "pe": safe_get(info, "trailingPE"),
             "forwardPE": safe_get(info, "forwardPE"),
             "eps": safe_get(info, "trailingEps"),
-            "dividend": safe_get(info, "dividendYield"),
+            "dividend": get_dividend_yield(info),
             "beta": safe_get(info, "beta"),
             "change": safe_get(info, "regularMarketChangePercent"),
         }
@@ -157,17 +215,10 @@ async def compare_stocks(symbols: str):
                 revenue = safe_get(info, "totalRevenue")
                 net_income = safe_get(info, "netIncomeToCommon")
                 total_equity = safe_get(info, "totalStockholderEquity")
-                total_debt = safe_get(info, "totalDebt")
                 
-                # Calculate ROE
-                roe = None
-                if net_income and total_equity and total_equity != 0:
-                    roe = (net_income / total_equity) * 100
-                
-                # Calculate Debt-to-Equity
-                debt_to_equity = None
-                if total_debt is not None and total_equity and total_equity != 0:
-                    debt_to_equity = total_debt / total_equity
+                roe = get_roe(info)
+                debt_to_equity = get_debt_to_equity(info)
+                dividend_yield = get_dividend_yield(info)
                 
                 comparison.append({
                     "symbol": symbol,
@@ -181,12 +232,12 @@ async def compare_stocks(symbols: str):
                     "revenueFormatted": format_number(revenue),
                     "netProfit": net_income,
                     "netProfitFormatted": format_number(net_income),
-                    "roe": round(roe, 2) if roe else None,
+                    "roe": roe,
                     "pe": safe_get(info, "trailingPE"),
                     "forwardPE": safe_get(info, "forwardPE"),
-                    "debtToEquity": round(debt_to_equity, 2) if debt_to_equity else safe_get(info, "debtToEquity"),
+                    "debtToEquity": debt_to_equity,
                     "eps": safe_get(info, "trailingEps"),
-                    "dividendYield": safe_get(info, "dividendYield"),
+                    "dividendYield": dividend_yield,
                     "beta": safe_get(info, "beta"),
                     "fiftyTwoWeekHigh": safe_get(info, "fiftyTwoWeekHigh"),
                     "fiftyTwoWeekLow": safe_get(info, "fiftyTwoWeekLow"),
@@ -336,16 +387,10 @@ async def get_recommendation(symbol: str):
         pe = safe_get(info, "trailingPE")
         forward_pe = safe_get(info, "forwardPE")
         eps = safe_get(info, "trailingEps")
-        roe = None
-        debt_to_equity = safe_get(info, "debtToEquity")
-        dividend_yield = safe_get(info, "dividendYield")
+        roe = get_roe(info)
+        debt_to_equity = get_debt_to_equity(info)
+        dividend_yield = get_dividend_yield(info)
         beta = safe_get(info, "beta")
-        
-        # Calculate ROE
-        net_income = safe_get(info, "netIncomeToCommon")
-        total_equity = safe_get(info, "totalStockholderEquity")
-        if net_income and total_equity and total_equity != 0:
-            roe = (net_income / total_equity) * 100
         
         # Calculate price momentum (short-term)
         price_change_1m = None
@@ -464,13 +509,13 @@ async def get_recommendation(symbol: str):
             "metrics": {
                 "pe": pe,
                 "forwardPE": forward_pe,
-                "roe": round(roe, 2) if roe else None,
+                "roe": roe,
                 "debtToEquity": debt_to_equity,
                 "dividendYield": dividend_yield,
                 "beta": beta,
-                "priceChange1m": round(price_change_1m, 2) if price_change_1m else None,
-                "priceChange3m": round(price_change_3m, 2) if price_change_3m else None,
-                "volumeTrend": round(volume_trend, 2) if volume_trend else None,
+                "priceChange1m": round(price_change_1m, 2) if price_change_1m is not None else None,
+                "priceChange3m": round(price_change_3m, 2) if price_change_3m is not None else None,
+                "volumeTrend": round(volume_trend, 2) if volume_trend is not None else None,
             }
         }
     except Exception as e:
@@ -503,12 +548,7 @@ async def stock_screener(
             market_cap = safe_get(info, "marketCap")
             pe = safe_get(info, "trailingPE")
             
-            # Calculate ROE
-            net_income = safe_get(info, "netIncomeToCommon")
-            total_equity = safe_get(info, "totalStockholderEquity")
-            roe = None
-            if net_income and total_equity and total_equity != 0:
-                roe = (net_income / total_equity) * 100
+            roe = get_roe(info)
             
             # Apply filters
             if sector and stock_sector and sector.lower() not in stock_sector.lower():
@@ -529,7 +569,7 @@ async def stock_screener(
                 "marketCap": market_cap,
                 "marketCapFormatted": format_number(market_cap),
                 "pe": pe,
-                "roe": round(roe, 2) if roe else None,
+                "roe": roe,
             })
             
             if len(results) >= 10:

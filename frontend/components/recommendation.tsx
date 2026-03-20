@@ -229,29 +229,29 @@ export function Recommendation({ symbols }: RecommendationProps) {
         <div>
           <h4 className="font-medium mb-3">Key Metrics</h4>
           <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
-            <MetricCard label="P/E Ratio" value={data?.metrics?.pe || null} />
-            <MetricCard label="Forward P/E" value={data?.metrics?.forwardPE || null} />
-            <MetricCard label="ROE" value={data?.metrics?.roe || null} format={(v) => `${v.toFixed(1)}%`} />
-            <MetricCard label="D/E Ratio" value={data?.metrics?.debtToEquity || null} />
-            <MetricCard label="Beta" value={data?.metrics?.beta || null} />
+            <MetricCard label="P/E Ratio" value={data?.metrics?.pe ?? null} />
+            <MetricCard label="Forward P/E" value={data?.metrics?.forwardPE ?? null} />
+            <MetricCard label="ROE" value={data?.metrics?.roe ?? null} format={(v) => `${v.toFixed(1)}%`} />
+            <MetricCard label="D/E Ratio" value={data?.metrics?.debtToEquity ?? null} />
+            <MetricCard label="Beta" value={data?.metrics?.beta ?? null} />
             <MetricCard 
               label="1M Change" 
-              value={data?.metrics?.priceChange1m || null} 
+              value={data?.metrics?.priceChange1m ?? null} 
               format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`} 
             />
             <MetricCard 
               label="3M Change" 
-              value={data?.metrics?.priceChange3m || null} 
+              value={data?.metrics?.priceChange3m ?? null} 
               format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`} 
             />
             <MetricCard 
               label="Vol Trend" 
-              value={data?.metrics?.volumeTrend || null} 
+              value={data?.metrics?.volumeTrend ?? null} 
               format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`} 
             />
             <MetricCard 
               label="Div Yield" 
-              value={data?.metrics?.dividendYield || null} 
+              value={data?.metrics?.dividendYield ?? null} 
               format={(v) => `${(v * 100).toFixed(2)}%`} 
             />
           </div>
