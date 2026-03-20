@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { 
   TrendingUp, 
@@ -9,7 +9,8 @@ import {
   CheckCircle, 
   XCircle,
   MinusCircle,
-  BarChart3
+  BarChart3,
+  Newspaper
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -50,6 +51,17 @@ interface RecommendationData {
     priceChange3m: number | null
     volumeTrend: number | null
   }
+  error?: string
+}
+
+interface NewsAnalysisData {
+  overallSentiment: 'Positive' | 'Neutral' | 'Negative'
+  sentimentScore: number
+  articles: Array<{
+    title: string
+    url: string
+    sentiment: 'Positive' | 'Neutral' | 'Negative'
+  }>
   error?: string
 }
 
@@ -98,13 +110,103 @@ function MetricCard({ label, value, format }: { label: string; value: number | n
   )
 }
 
+function getTrendLabel(metrics: RecommendationData['metrics'] | undefined) {
+  if (!metrics) return 'Sideways'
+
+  const { priceChange1m, priceChange3m } = metrics
+  if (
+    typeof priceChange1m === 'number' &&
+    typeof priceChange3m === 'number' &&
+    priceChange1m > 0 &&
+    priceChange3m > 0
+  ) {
+    return 'Uptrend'
+  }
+
+  if (
+    typeof priceChange1m === 'number' &&
+    typeof priceChange3m === 'number' &&
+    priceChange1m < 0 &&
+    priceChange3m < 0
+  ) {
+    return 'Downtrend'
+  }
+
+  return 'Sideways'
+}
+
+function getNewsDrivenAction(
+  sentiment: NewsAnalysisData['overallSentiment'],
+  trend: ReturnType<typeof getTrendLabel>,
+) {
+  if (sentiment === 'Positive' && trend === 'Uptrend') {
+    return 'BUY'
+  }
+
+  if (sentiment === 'Negative' && trend === 'Downtrend') {
+    return 'SELL'
+  }
+
+  return 'HOLD'
+}
+
+function getActionVariant(action: 'BUY' | 'SELL' | 'HOLD') {
+  if (action === 'BUY') return 'success'
+  if (action === 'SELL') return 'destructive'
+  return 'warning'
+}
+
+function buildSignalExplanation(
+  stockName: string,
+  sentiment: NewsAnalysisData['overallSentiment'],
+  trend: ReturnType<typeof getTrendLabel>,
+  action: 'BUY' | 'SELL' | 'HOLD',
+  articleCount: number,
+) {
+  if (articleCount === 0) {
+    return `No recent articles were available for ${stockName}, so the signal stays ${action} until news sentiment is available.`
+  }
+
+  if (action === 'BUY') {
+    return `Based on recent positive news and an upward trend, ${stockName} is a BUY.`
+  }
+
+  if (action === 'SELL') {
+    return `Based on recent negative news and a downward trend, ${stockName} is a SELL.`
+  }
+
+  return `${stockName} is a HOLD because the recent ${sentiment.toLowerCase()} news flow does not align with a clear ${trend.toLowerCase()} confirmation.`
+}
+
 export function Recommendation({ symbols }: RecommendationProps) {
   const [selectedSymbol, setSelectedSymbol] = useState(symbols[0] || '')
+
+  useEffect(() => {
+    if (symbols.length > 0 && !symbols.includes(selectedSymbol)) {
+      setSelectedSymbol(symbols[0])
+    }
+  }, [selectedSymbol, symbols])
 
   const { data, isLoading } = useSWR<RecommendationData>(
     selectedSymbol ? `/api/recommendation/${selectedSymbol}` : null,
     fetcher,
     { revalidateOnFocus: false }
+  )
+  const { data: newsData } = useSWR<NewsAnalysisData>(
+    selectedSymbol ? `/api/news-analysis?stock=${selectedSymbol}` : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  )
+
+  const trend = useMemo(() => getTrendLabel(data?.metrics), [data?.metrics])
+  const overallSentiment = newsData?.overallSentiment ?? 'Neutral'
+  const signalAction = getNewsDrivenAction(overallSentiment, trend)
+  const signalExplanation = buildSignalExplanation(
+    data?.name || selectedSymbol,
+    overallSentiment,
+    trend,
+    signalAction,
+    newsData?.articles?.length ?? 0,
   )
 
   if (symbols.length === 0) {
@@ -174,6 +276,33 @@ export function Recommendation({ symbols }: RecommendationProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Newspaper className="size-4 text-primary" />
+                <h4 className="font-medium">News-Adjusted Signal</h4>
+              </div>
+              <p className="text-sm text-muted-foreground">{signalExplanation}</p>
+            </div>
+            <Badge className="text-sm px-3 py-1" variant={getActionVariant(signalAction)}>
+              {signalAction}
+            </Badge>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant={overallSentiment === 'Positive' ? 'success' : overallSentiment === 'Negative' ? 'destructive' : 'warning'}>
+              Sentiment: {overallSentiment}
+            </Badge>
+            <Badge variant="outline">Trend: {trend}</Badge>
+            <Badge variant="outline">Articles: {newsData?.articles?.length ?? 0}</Badge>
+          </div>
+          {newsData?.error && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              News sentiment unavailable: {newsData.error}
+            </p>
+          )}
+        </div>
+
         {/* Recommendation Badges */}
         <div className="grid gap-4 md:grid-cols-2">
           {/* Long Term */}

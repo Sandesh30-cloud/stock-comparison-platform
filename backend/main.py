@@ -46,10 +46,36 @@ def format_number(value, decimals=2):
     return value
 
 
-def get_debt_to_equity(info: dict):
+def get_latest_statement_value(df: Optional[pd.DataFrame], row_names: list[str]):
+    """Return the latest non-null value for the first matching financial statement row."""
+    if df is None or df.empty:
+        return None
+
+    for row_name in row_names:
+        if row_name in df.index:
+            series = df.loc[row_name].dropna()
+            if not series.empty:
+                return float(series.iloc[0])
+
+    return None
+
+
+def get_debt_to_equity(info: dict, balance_sheet: Optional[pd.DataFrame] = None):
     """Return debt-to-equity as a ratio, not a percentage-scaled vendor value."""
-    total_equity = safe_get(info, "totalStockholderEquity")
-    total_debt = safe_get(info, "totalDebt")
+    total_equity = get_latest_statement_value(
+        balance_sheet,
+        [
+            "Stockholders Equity",
+            "Total Equity Gross Minority Interest",
+            "Common Stock Equity",
+        ],
+    )
+    if total_equity is None:
+        total_equity = safe_get(info, "totalStockholderEquity")
+
+    total_debt = get_latest_statement_value(balance_sheet, ["Total Debt", "Net Debt"])
+    if total_debt is None:
+        total_debt = safe_get(info, "totalDebt")
 
     if total_debt is not None and total_equity and total_equity != 0:
         return round(total_debt / total_equity, 2)
@@ -88,10 +114,19 @@ def get_dividend_yield(info: dict):
     return round(normalized, 4)
 
 
-def get_roe(info: dict):
+def get_roe(info: dict, balance_sheet: Optional[pd.DataFrame] = None):
     """Return ROE as a percentage, normalizing vendor values when needed."""
     net_income = safe_get(info, "netIncomeToCommon")
-    total_equity = safe_get(info, "totalStockholderEquity")
+    total_equity = get_latest_statement_value(
+        balance_sheet,
+        [
+            "Stockholders Equity",
+            "Total Equity Gross Minority Interest",
+            "Common Stock Equity",
+        ],
+    )
+    if total_equity is None:
+        total_equity = safe_get(info, "totalStockholderEquity")
 
     if net_income is not None and total_equity and total_equity != 0:
         return round((net_income / total_equity) * 100, 2)
@@ -102,6 +137,49 @@ def get_roe(info: dict):
 
     normalized = raw_roe * 100 if abs(raw_roe) <= 1 else raw_roe
     return round(normalized, 2)
+
+
+def get_one_year_history(ticker: yf.Ticker) -> pd.DataFrame:
+    """Fetch one year of unadjusted OHLCV history."""
+    return ticker.history(period="1y", auto_adjust=False)
+
+
+def compute_52_week_range(hist: pd.DataFrame):
+    """Compute 52-week range metrics from 1-year OHLC history only."""
+    if hist.empty:
+        return None
+
+    required_columns = {"High", "Low", "Close"}
+    if not required_columns.issubset(hist.columns):
+        return None
+
+    high_series = hist["High"].dropna()
+    low_series = hist["Low"].dropna()
+    close_series = hist["Close"].dropna()
+
+    if high_series.empty or low_series.empty or close_series.empty:
+        return None
+
+    high_52w = float(high_series.max())
+    low_52w = float(low_series.min())
+    current = float(close_series.iloc[-1])
+
+    if high_52w <= low_52w:
+        return None
+    if high_52w < current:
+        return None
+    if low_52w > current:
+        return None
+
+    range_position = (current - low_52w) / (high_52w - low_52w)
+    drawdown = (current - high_52w) / high_52w
+
+    return {
+        "high_52w": round(high_52w, 2),
+        "low_52w": round(low_52w, 2),
+        "range_position_percent": round(range_position * 100, 2),
+        "drawdown_percent": round(drawdown * 100, 2),
+    }
 
 
 @app.get("/health")
@@ -169,6 +247,8 @@ async def get_stock_info(symbol: str):
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
+        hist = get_one_year_history(ticker)
+        range_metrics = compute_52_week_range(hist)
         
         return {
             "symbol": symbol,
@@ -184,8 +264,10 @@ async def get_stock_info(symbol: str):
             "open": safe_get(info, "open"),
             "dayHigh": safe_get(info, "dayHigh"),
             "dayLow": safe_get(info, "dayLow"),
-            "fiftyTwoWeekHigh": safe_get(info, "fiftyTwoWeekHigh"),
-            "fiftyTwoWeekLow": safe_get(info, "fiftyTwoWeekLow"),
+            "fiftyTwoWeekHigh": range_metrics["high_52w"] if range_metrics else None,
+            "fiftyTwoWeekLow": range_metrics["low_52w"] if range_metrics else None,
+            "rangePositionPercent": range_metrics["range_position_percent"] if range_metrics else None,
+            "drawdownPercent": range_metrics["drawdown_percent"] if range_metrics else None,
             "volume": safe_get(info, "volume"),
             "avgVolume": safe_get(info, "averageVolume"),
             "pe": safe_get(info, "trailingPE"),
@@ -210,14 +292,17 @@ async def compare_stocks(symbols: str):
             try:
                 ticker = yf.Ticker(symbol)
                 info = ticker.info
+                hist = get_one_year_history(ticker)
+                range_metrics = compute_52_week_range(hist)
+                balance_sheet = ticker.balance_sheet
                 
                 # Get financial data
                 revenue = safe_get(info, "totalRevenue")
                 net_income = safe_get(info, "netIncomeToCommon")
                 total_equity = safe_get(info, "totalStockholderEquity")
                 
-                roe = get_roe(info)
-                debt_to_equity = get_debt_to_equity(info)
+                roe = get_roe(info, balance_sheet)
+                debt_to_equity = get_debt_to_equity(info, balance_sheet)
                 dividend_yield = get_dividend_yield(info)
                 
                 comparison.append({
@@ -239,8 +324,10 @@ async def compare_stocks(symbols: str):
                     "eps": safe_get(info, "trailingEps"),
                     "dividendYield": dividend_yield,
                     "beta": safe_get(info, "beta"),
-                    "fiftyTwoWeekHigh": safe_get(info, "fiftyTwoWeekHigh"),
-                    "fiftyTwoWeekLow": safe_get(info, "fiftyTwoWeekLow"),
+                    "fiftyTwoWeekHigh": range_metrics["high_52w"] if range_metrics else None,
+                    "fiftyTwoWeekLow": range_metrics["low_52w"] if range_metrics else None,
+                    "rangePositionPercent": range_metrics["range_position_percent"] if range_metrics else None,
+                    "drawdownPercent": range_metrics["drawdown_percent"] if range_metrics else None,
                 })
             except Exception as e:
                 comparison.append({
@@ -304,10 +391,14 @@ async def get_holders(symbol: str):
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
+        balance_sheet = ticker.balance_sheet
         
         # Get holder information
         institutional_holders = None
         major_holders = None
+        mutual_fund_holders = None
+        institutional_holding = safe_get(info, "heldPercentInstitutions")
+        insider_holding = safe_get(info, "heldPercentInsiders")
         
         try:
             ih = ticker.institutional_holders
@@ -327,19 +418,40 @@ async def get_holders(symbol: str):
             if mh is not None and not mh.empty:
                 major_holders = []
                 for idx, row in mh.iterrows():
+                    value = row.iloc[0] if len(row) > 0 and pd.notna(row.iloc[0]) else None
+                    description = str(idx)
                     major_holders.append({
-                        "value": str(row.iloc[0]) if pd.notna(row.iloc[0]) else None,
-                        "description": str(row.iloc[1]) if len(row) > 1 and pd.notna(row.iloc[1]) else str(idx)
+                        "value": str(value) if value is not None else None,
+                        "description": description
                     })
+
+                if "institutionsPercentHeld" in mh.index and pd.notna(mh.loc["institutionsPercentHeld"].iloc[0]):
+                    institutional_holding = float(mh.loc["institutionsPercentHeld"].iloc[0])
+                if "insidersPercentHeld" in mh.index and pd.notna(mh.loc["insidersPercentHeld"].iloc[0]):
+                    insider_holding = float(mh.loc["insidersPercentHeld"].iloc[0])
+        except:
+            pass
+
+        try:
+            mf = ticker.mutualfund_holders
+            if mf is not None and not mf.empty:
+                mutual_fund_holders = mf.head(10).to_dict('records')
+                for holder in mutual_fund_holders:
+                    for key, value in holder.items():
+                        if pd.isna(value):
+                            holder[key] = None
+                        elif isinstance(value, (pd.Timestamp, datetime)):
+                            holder[key] = str(value)
         except:
             pass
         
         return {
             "symbol": symbol,
-            "institutionalHolding": safe_get(info, "heldPercentInstitutions"),
-            "insiderHolding": safe_get(info, "heldPercentInsiders"),
+            "institutionalHolding": institutional_holding,
+            "insiderHolding": insider_holding,
             "institutionalHolders": institutional_holders,
             "majorHolders": major_holders,
+            "mutualFundHolders": mutual_fund_holders,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -375,20 +487,40 @@ async def get_price_history(symbol: str, period: str = "1y"):
         return {"error": str(e)}
 
 
+@app.get("/range-analysis/{symbol}")
+async def get_range_analysis(symbol: str):
+    """Return computed 52-week range metrics from 1-year OHLC history."""
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = get_one_year_history(ticker)
+        range_metrics = compute_52_week_range(hist)
+
+        if range_metrics is None:
+            return {"error": "Unable to compute 52-week range from 1-year history"}
+
+        return {
+            "symbol": symbol,
+            **range_metrics,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/recommendation/{symbol}")
 async def get_recommendation(symbol: str):
     """Get AI-driven stock recommendations"""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
+        balance_sheet = ticker.balance_sheet
         hist = ticker.history(period="1y")
         
         # Gather metrics for analysis
         pe = safe_get(info, "trailingPE")
         forward_pe = safe_get(info, "forwardPE")
         eps = safe_get(info, "trailingEps")
-        roe = get_roe(info)
-        debt_to_equity = get_debt_to_equity(info)
+        roe = get_roe(info, balance_sheet)
+        debt_to_equity = get_debt_to_equity(info, balance_sheet)
         dividend_yield = get_dividend_yield(info)
         beta = safe_get(info, "beta")
         
@@ -543,12 +675,13 @@ async def stock_screener(
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
+            balance_sheet = ticker.balance_sheet
             
             stock_sector = safe_get(info, "sector")
             market_cap = safe_get(info, "marketCap")
             pe = safe_get(info, "trailingPE")
             
-            roe = get_roe(info)
+            roe = get_roe(info, balance_sheet)
             
             # Apply filters
             if sector and stock_sector and sector.lower() not in stock_sector.lower():

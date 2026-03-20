@@ -28,6 +28,14 @@ interface HolderData {
     value: string
     description: string
   }> | null
+  mutualFundHolders: Array<{
+    Holder: string
+    Shares: number
+    'Date Reported': string
+    pctHeld?: number
+    pctChange?: number
+    Value: number
+  }> | null
   error?: string
 }
 
@@ -115,7 +123,7 @@ export function HoldersView({ symbols }: HoldersViewProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           {/* Pie Chart */}
           <div>
             <h4 className="font-medium mb-4">Ownership Distribution</h4>
@@ -208,7 +216,7 @@ export function HoldersView({ symbols }: HoldersViewProps) {
           </div>
 
           {/* Institutional Holders Table */}
-          <div>
+          <div className="space-y-6">
             <h4 className="font-medium mb-4">Top Institutional Holders</h4>
             {data?.institutionalHolders && data.institutionalHolders.length > 0 ? (
               <div className="max-h-[350px] overflow-auto">
@@ -241,6 +249,40 @@ export function HoldersView({ symbols }: HoldersViewProps) {
                 No institutional holder data available
               </p>
             )}
+
+            <div>
+              <h4 className="font-medium mb-4">Top Mutual Fund Holders</h4>
+              {data?.mutualFundHolders && data.mutualFundHolders.length > 0 ? (
+                <div className="max-h-[320px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fund</TableHead>
+                        <TableHead className="text-right">% Held</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.mutualFundHolders.slice(0, 10).map((holder, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium truncate max-w-[200px]">
+                            {holder.Holder}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {typeof holder.pctHeld === 'number'
+                              ? `${(holder.pctHeld * 100).toFixed(2)}%`
+                              : 'N/A'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No mutual fund holder data available
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </CardContent>

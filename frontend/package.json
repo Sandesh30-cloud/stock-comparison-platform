@@ -31,6 +31,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "2.15.0",
+    "sentiment": "^5.0.2",
     "sonner": "^1.7.1",
     "swr": "^2.2.5",
     "tailwind-merge": "^3.3.1",

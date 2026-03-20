@@ -1,7 +1,7 @@
 'use client'
 
 import useSWR from 'swr'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Trophy, Gauge } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -27,8 +27,6 @@ interface ComparisonStock {
   eps: number | null
   dividendYield: number | null
   beta: number | null
-  fiftyTwoWeekHigh: number | null
-  fiftyTwoWeekLow: number | null
   error?: string
 }
 
@@ -37,6 +35,14 @@ interface ComparisonTableProps {
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
+
+function getComparisonScore(stock: ComparisonStock): number | null {
+  if (stock.roe === null || stock.pe === null || stock.debtToEquity === null) {
+    return null
+  }
+
+  return stock.roe - stock.pe * 0.2 - stock.debtToEquity * 10
+}
 
 export function ComparisonTable({ symbols }: ComparisonTableProps) {
   const { data, error, isLoading } = useSWR<{ comparison: ComparisonStock[] }>(
@@ -92,11 +98,6 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
 
   const stocks = data?.comparison || []
 
-  const formatValue = (value: number | null | undefined, prefix = '', suffix = '') => {
-    if (value === null || value === undefined) return 'N/A'
-    return `${prefix}${typeof value === 'number' ? value.toFixed(2) : value}${suffix}`
-  }
-
   const getChangeIndicator = (value: number | null) => {
     if (value === null) return <Minus className="size-4 text-muted-foreground" />
     if (value > 0) return <TrendingUp className="size-4 text-success" />
@@ -119,6 +120,15 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
   const bestROE = getBestValue(stocks, 'roe', true)
   const bestPE = getBestValue(stocks, 'pe', false)
   const bestDebtEquity = getBestValue(stocks, 'debtToEquity', false)
+  const bestDividendYield = getBestValue(stocks, 'dividendYield', true)
+  const bestChange = getBestValue(stocks, 'change', true)
+  const bestScore = stocks
+    .map((stock) => ({ symbol: stock.symbol, score: getComparisonScore(stock) }))
+    .filter((item): item is { symbol: string; score: number } => item.score !== null)
+    .reduce<{ symbol: string; score: number } | null>(
+      (best, item) => (best === null || item.score > best.score ? item : best),
+      null,
+    )
 
   const metrics = [
     { label: 'Current Price', key: 'price' as const, format: (v: number) => `$${v.toFixed(2)}` },
@@ -131,10 +141,8 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
     { label: 'Forward P/E', key: 'forwardPE' as const, format: (v: number) => v.toFixed(2) },
     { label: 'Debt/Equity', key: 'debtToEquity' as const, format: (v: number) => v.toFixed(2), best: bestDebtEquity, higherBetter: false },
     { label: 'EPS', key: 'eps' as const, format: (v: number) => `$${v.toFixed(2)}` },
-    { label: 'Dividend Yield', key: 'dividendYield' as const, format: (v: number) => `${(v * 100).toFixed(2)}%` },
+    { label: 'Dividend Yield', key: 'dividendYield' as const, format: (v: number) => `${(v * 100).toFixed(2)}%`, best: bestDividendYield, higherBetter: true },
     { label: 'Beta', key: 'beta' as const, format: (v: number) => v.toFixed(2) },
-    { label: '52W High', key: 'fiftyTwoWeekHigh' as const, format: (v: number) => `$${v.toFixed(2)}` },
-    { label: '52W Low', key: 'fiftyTwoWeekLow' as const, format: (v: number) => `$${v.toFixed(2)}` },
   ]
 
   return (
@@ -145,7 +153,35 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
           Side-by-side comparison of key financial metrics
         </CardDescription>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="space-y-6 overflow-x-auto">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Trophy className="size-4 text-warning" />
+              Best Overall Setup
+            </div>
+            <p className="mt-2 text-2xl font-semibold">
+              {bestScore?.symbol ?? 'N/A'}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on stronger ROE with lighter valuation and leverage.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Gauge className="size-4 text-primary" />
+              Strongest Momentum
+            </div>
+            <p className="mt-2 text-2xl font-semibold">
+              {stocks.find((stock) => stock.change === bestChange)?.symbol ?? 'N/A'}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Highest current session move among selected stocks.
+            </p>
+          </div>
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow className="border-border/50">
