@@ -19,6 +19,12 @@ StockAnalyzer is a full-stack stock analysis dashboard built with a FastAPI back
 - Backend: FastAPI, yfinance, pandas, numpy
 - News sentiment: Axios + `sentiment`
 
+## Demo Video
+
+Watch the project demo here:
+
+[StockAnalyzer Demo Video](https://youtu.be/5ghnGrWl-SA?si=wDY5NcEY-S8k7ASw)
+
 ## Project Structure
 
 ```text
