@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 interface ComparisonStock {
   symbol: string
   name: string
+  currency?: string
+  currencySymbol?: string
   sector: string
   price: number | null
   change: number | null
@@ -35,6 +37,15 @@ interface ComparisonTableProps {
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
+
+function formatCompactCurrency(value: number, currencySymbol = '$') {
+  const absValue = Math.abs(value)
+  if (absValue >= 1e12) return `${currencySymbol}${(value / 1e12).toFixed(2)}T`
+  if (absValue >= 1e9) return `${currencySymbol}${(value / 1e9).toFixed(2)}B`
+  if (absValue >= 1e6) return `${currencySymbol}${(value / 1e6).toFixed(2)}M`
+  if (absValue >= 1e3) return `${currencySymbol}${(value / 1e3).toFixed(2)}K`
+  return `${currencySymbol}${value.toFixed(2)}`
+}
 
 function getComparisonScore(stock: ComparisonStock): number | null {
   if (stock.roe === null || stock.pe === null || stock.debtToEquity === null) {
@@ -131,16 +142,16 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
     )
 
   const metrics = [
-    { label: 'Current Price', key: 'price' as const, format: (v: number) => `$${v.toFixed(2)}` },
+    { label: 'Current Price', key: 'price' as const, format: (v: number, stock: ComparisonStock) => `${stock.currencySymbol || '$'}${v.toFixed(2)}` },
     { label: 'Change %', key: 'change' as const, format: (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`, isChange: true },
-    { label: 'Market Cap', key: 'marketCapFormatted' as const, raw: true },
-    { label: 'Revenue', key: 'revenueFormatted' as const, raw: true },
-    { label: 'Net Profit', key: 'netProfitFormatted' as const, raw: true },
+    { label: 'Market Cap', key: 'marketCap' as const, format: (v: number, stock: ComparisonStock) => formatCompactCurrency(v, stock.currencySymbol || '$') },
+    { label: 'Revenue', key: 'revenue' as const, format: (v: number, stock: ComparisonStock) => formatCompactCurrency(v, stock.currencySymbol || '$') },
+    { label: 'Net Profit', key: 'netProfit' as const, format: (v: number, stock: ComparisonStock) => formatCompactCurrency(v, stock.currencySymbol || '$') },
     { label: 'ROE', key: 'roe' as const, format: (v: number) => `${v.toFixed(2)}%`, best: bestROE, higherBetter: true },
     { label: 'P/E Ratio', key: 'pe' as const, format: (v: number) => v.toFixed(2), best: bestPE, higherBetter: false },
     { label: 'Forward P/E', key: 'forwardPE' as const, format: (v: number) => v.toFixed(2) },
     { label: 'Debt/Equity', key: 'debtToEquity' as const, format: (v: number) => v.toFixed(2), best: bestDebtEquity, higherBetter: false },
-    { label: 'EPS', key: 'eps' as const, format: (v: number) => `$${v.toFixed(2)}` },
+    { label: 'EPS', key: 'eps' as const, format: (v: number, stock: ComparisonStock) => `${stock.currencySymbol || '$'}${v.toFixed(2)}` },
     { label: 'Dividend Yield', key: 'dividendYield' as const, format: (v: number) => `${(v * 100).toFixed(2)}%`, best: bestDividendYield, higherBetter: true },
     { label: 'Beta', key: 'beta' as const, format: (v: number) => v.toFixed(2) },
   ]
@@ -240,7 +251,7 @@ export function ComparisonTable({ symbols }: ComparisonTableProps) {
                           {metric.raw 
                             ? (value || 'N/A')
                             : typeof value === 'number' 
-                              ? metric.format!(value)
+                              ? metric.format!(value, stock)
                               : 'N/A'
                           }
                         </span>

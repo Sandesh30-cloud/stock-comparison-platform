@@ -1,3 +1,5 @@
+import axios from 'axios'
+
 const DEFAULT_ARTICLE_LIMIT = 8
 
 function buildNewsApiUrl(symbol, limit) {
@@ -41,62 +43,68 @@ function normalizeArticle(article) {
 }
 
 async function fetchFromNewsApi(symbol, limit) {
-  const response = await fetch(buildNewsApiUrl(symbol, limit), {
-    headers: {
-      Accept: 'application/json',
-    },
-    cache: 'no-store',
-  })
+  const url = buildNewsApiUrl(symbol, limit)
 
-  if (!response.ok) {
-    throw new Error(`NewsAPI request failed with status ${response.status}`)
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+
+    const articles = Array.isArray(response.data?.articles) ? response.data.articles : []
+
+    return articles
+      .map((article) =>
+        normalizeArticle({
+          title: article.title,
+          description: article.description,
+          url: article.url,
+          publishedAt: article.publishedAt,
+        }),
+      )
+      .filter(Boolean)
+      .slice(0, limit)
+  } catch (error) {
+    if (error.response?.status === 429) {
+      return { error: 'Daily news limit reached' }
+    }
+    return { error: 'Failed to fetch news' }
   }
-
-  const payload = await response.json()
-  const articles = Array.isArray(payload.articles) ? payload.articles : []
-
-  return articles
-    .map((article) =>
-      normalizeArticle({
-        title: article.title,
-        description: article.description,
-        url: article.url,
-        publishedAt: article.publishedAt,
-      }),
-    )
-    .filter(Boolean)
-    .slice(0, limit)
 }
 
 async function fetchFromFinnhub(symbol, limit) {
-  const response = await fetch(buildFinnhubUrl(symbol), {
-    headers: {
-      Accept: 'application/json',
-    },
-    cache: 'no-store',
-  })
+  const url = buildFinnhubUrl(symbol)
 
-  if (!response.ok) {
-    throw new Error(`Finnhub request failed with status ${response.status}`)
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+
+    const articles = Array.isArray(response.data) ? response.data : []
+
+    return articles
+      .map((article) =>
+        normalizeArticle({
+          title: article.headline,
+          description: article.summary,
+          url: article.url,
+          publishedAt: article.datetime
+            ? new Date(article.datetime * 1000).toISOString()
+            : undefined,
+        }),
+      )
+      .filter(Boolean)
+      .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime())
+      .slice(0, limit)
+  } catch (error) {
+    if (error.response?.status === 429) {
+      return { error: 'Daily news limit reached' }
+    }
+    return { error: 'Failed to fetch news' }
   }
-
-  const payload = await response.json()
-  const articles = Array.isArray(payload) ? payload : []
-
-  return articles
-    .map((article) =>
-      normalizeArticle({
-        title: article.headline,
-        description: article.summary,
-        url: article.url,
-        publishedAt: article.datetime
-          ? new Date(article.datetime * 1000).toISOString()
-          : undefined,
-      }),
-    )
-    .filter(Boolean)
-    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime())
-    .slice(0, limit)
 }
 
 export async function fetchStockNews(symbol, limit = DEFAULT_ARTICLE_LIMIT) {

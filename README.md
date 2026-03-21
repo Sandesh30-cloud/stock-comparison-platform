@@ -1,4 +1,4 @@
-# Stock Comparison Platform
+# Stock Analyzer 
 
 Compare stocks side-by-side with financial data and AI-powered insights.
 

@@ -16,6 +16,8 @@ interface StockResult {
   marketCap: number | null
   price: number | null
   change: number | null
+  currency?: string
+  currencySymbol?: string
 }
 
 interface StockSearchProps {
@@ -91,12 +93,12 @@ export function StockSearch({
     }
   }
 
-  const formatMarketCap = (cap: number | null) => {
+  const formatMarketCap = (cap: number | null, currencySymbol = '$') => {
     if (!cap) return 'N/A'
-    if (cap >= 1e12) return `$${(cap / 1e12).toFixed(2)}T`
-    if (cap >= 1e9) return `$${(cap / 1e9).toFixed(2)}B`
-    if (cap >= 1e6) return `$${(cap / 1e6).toFixed(2)}M`
-    return `$${cap.toLocaleString()}`
+    if (cap >= 1e12) return `${currencySymbol}${(cap / 1e12).toFixed(2)}T`
+    if (cap >= 1e9) return `${currencySymbol}${(cap / 1e9).toFixed(2)}B`
+    if (cap >= 1e6) return `${currencySymbol}${(cap / 1e6).toFixed(2)}M`
+    return `${currencySymbol}${cap.toLocaleString()}`
   }
 
   return (
@@ -165,6 +167,10 @@ export function StockSearch({
               className="py-4 rounded-xl border-border/50 hover:border-primary/30 hover:bg-muted/20 transition-all"
             >
               <CardContent className="flex items-center justify-between gap-4">
+                {(() => {
+                  const currencySymbol = stock.currencySymbol || '$'
+                  return (
+                    <>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-lg tabular-nums">{stock.symbol}</span>
@@ -179,7 +185,7 @@ export function StockSearch({
                 <div className="flex items-center gap-6">
                   <div className="text-right">
                     <p className="font-mono font-semibold text-lg tabular-nums">
-                      ${stock.price?.toFixed(2) || 'N/A'}
+                      {stock.price !== null && stock.price !== undefined ? `${currencySymbol}${stock.price.toFixed(2)}` : 'N/A'}
                     </p>
                     {stock.change !== null && (
                       <p
@@ -200,7 +206,7 @@ export function StockSearch({
                   <div className="text-right text-sm">
                     <p className="text-muted-foreground">Market Cap</p>
                     <p className="font-semibold tabular-nums">
-                      {formatMarketCap(stock.marketCap)}
+                      {formatMarketCap(stock.marketCap, currencySymbol)}
                     </p>
                   </div>
                   <Button
@@ -232,6 +238,9 @@ export function StockSearch({
                     )}
                   </Button>
                 </div>
+                    </>
+                  )
+                })()}
               </CardContent>
             </Card>
           ))}

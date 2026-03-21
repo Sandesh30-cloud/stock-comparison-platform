@@ -15,7 +15,19 @@ export async function GET(request: Request) {
   }
 
   try {
-    const articles = analyzeArticles(await fetchStockNews(stock, 8))
+    const newsResult = await fetchStockNews(stock, 8)
+    if (!Array.isArray(newsResult)) {
+      return NextResponse.json({
+        stock,
+        overallSentiment: 'Neutral',
+        sentimentScore: 0,
+        counts: { positive: 0, neutral: 0, negative: 0 },
+        articles: [],
+        error: newsResult.error,
+      })
+    }
+
+    const articles = analyzeArticles(newsResult)
     const aggregate = aggregateSentiment(articles)
 
     return NextResponse.json({

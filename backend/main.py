@@ -19,6 +19,10 @@ app.add_middleware(
 )
 
 
+STATEMENT_SCALE_LABEL = "B"
+STATEMENT_SCALE_DIVISOR = 1e9
+
+
 def safe_get(info: dict, key: str, default=None):
     """Safely get value from dict, handling None and NaN"""
     value = info.get(key, default)
@@ -44,6 +48,36 @@ def format_number(value, decimals=2):
             return f"{value/1e3:.{decimals}f}K"
         return round(value, decimals)
     return value
+
+
+def choose_statement_scale(df: pd.DataFrame) -> dict[str, float | str]:
+    """Use a fixed millions scale for all financial statements."""
+    return {"label": STATEMENT_SCALE_LABEL, "divisor": float(STATEMENT_SCALE_DIVISOR)}
+
+
+def format_number_with_scale(value, scale_divisor=1.0, decimals=2):
+    """Format a numeric value using a preselected common scale."""
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return round(value / scale_divisor, decimals)
+
+    return value
+
+
+def get_currency_symbol(currency: Optional[str]) -> str:
+    """Map common Yahoo currency codes to display symbols."""
+    mapping = {
+        "USD": "$",
+        "INR": "₹",
+        "EUR": "EUR",
+        "GBP": "GBP",
+        "JPY": "JPY",
+        "CAD": "CAD",
+        "AUD": "AUD",
+    }
+    return mapping.get((currency or "").upper(), currency or "")
 
 
 def get_latest_statement_value(df: Optional[pd.DataFrame], row_names: list[str]):
@@ -200,6 +234,7 @@ def _search_stock_sync(query: str) -> dict:
                 test_ticker = yf.Ticker(f"{query.upper()}{suffix}")
                 test_info = test_ticker.info
                 if test_info and test_info.get("regularMarketPrice"):
+                    currency = safe_get(test_info, "currency", "USD")
                     results.append({
                         "symbol": f"{query.upper()}{suffix}",
                         "name": safe_get(test_info, "longName", query.upper()),
@@ -208,11 +243,14 @@ def _search_stock_sync(query: str) -> dict:
                         "marketCap": safe_get(test_info, "marketCap"),
                         "price": safe_get(test_info, "regularMarketPrice"),
                         "change": safe_get(test_info, "regularMarketChangePercent"),
+                        "currency": currency,
+                        "currencySymbol": get_currency_symbol(currency),
                     })
             except Exception:
                 continue
         return {"results": results}
 
+    currency = safe_get(info, "currency", "USD")
     return {
         "results": [{
             "symbol": query.upper(),
@@ -222,6 +260,8 @@ def _search_stock_sync(query: str) -> dict:
             "marketCap": safe_get(info, "marketCap"),
             "price": safe_get(info, "regularMarketPrice"),
             "change": safe_get(info, "regularMarketChangePercent"),
+            "currency": currency,
+            "currencySymbol": get_currency_symbol(currency),
         }]
     }
 
@@ -253,6 +293,8 @@ async def get_stock_info(symbol: str):
         return {
             "symbol": symbol,
             "name": safe_get(info, "longName", symbol),
+            "currency": safe_get(info, "currency", "USD"),
+            "currencySymbol": get_currency_symbol(safe_get(info, "currency", "USD")),
             "sector": safe_get(info, "sector", "N/A"),
             "industry": safe_get(info, "industry", "N/A"),
             "description": safe_get(info, "longBusinessSummary", ""),
@@ -308,6 +350,8 @@ async def compare_stocks(symbols: str):
                 comparison.append({
                     "symbol": symbol,
                     "name": safe_get(info, "longName", symbol),
+                    "currency": safe_get(info, "currency", "USD"),
+                    "currencySymbol": get_currency_symbol(safe_get(info, "currency", "USD")),
                     "sector": safe_get(info, "sector", "N/A"),
                     "price": safe_get(info, "regularMarketPrice"),
                     "change": safe_get(info, "regularMarketChangePercent"),
@@ -360,6 +404,9 @@ async def get_financials(symbol: str, statement: str = "income"):
         
         if df is None or df.empty:
             return {"error": "No financial data available"}
+
+        scale = choose_statement_scale(df)
+        currency = safe_get(ticker.info, "currency", "USD")
         
         # Convert DataFrame to dict
         data = []
@@ -369,8 +416,10 @@ async def get_financials(symbol: str, statement: str = "income"):
                 value = df.loc[idx, col]
                 if pd.notna(value):
                     row[str(col.date())] = float(value)
+                    row[f"{str(col.date())}Formatted"] = format_number_with_scale(float(value), scale["divisor"])
                 else:
                     row[str(col.date())] = None
+                    row[f"{str(col.date())}Formatted"] = None
             data.append(row)
         
         periods = [str(col.date()) for col in df.columns]
@@ -378,6 +427,10 @@ async def get_financials(symbol: str, statement: str = "income"):
         return {
             "symbol": symbol,
             "title": title,
+            "currency": currency,
+            "currencySymbol": get_currency_symbol(currency),
+            "scaleLabel": scale["label"],
+            "scaleDivisor": scale["divisor"],
             "periods": periods,
             "data": data
         }

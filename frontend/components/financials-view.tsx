@@ -16,6 +16,10 @@ interface FinancialsViewProps {
 interface FinancialData {
   symbol: string
   title: string
+  currency?: string
+  currencySymbol?: string
+  scaleLabel?: string
+  scaleDivisor?: number
   periods: string[]
   data: Array<{
     item: string
@@ -26,16 +30,15 @@ interface FinancialData {
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
-const formatNumber = (value: number | string | null): string => {
+const formatNumber = (
+  value: number | string | null,
+  scaleLabel = '',
+): string => {
   if (value === null || value === undefined) return '-'
   if (typeof value === 'string') return value
-  
-  const absValue = Math.abs(value)
-  if (absValue >= 1e12) return `${(value / 1e12).toFixed(2)}T`
-  if (absValue >= 1e9) return `${(value / 1e9).toFixed(2)}B`
-  if (absValue >= 1e6) return `${(value / 1e6).toFixed(2)}M`
-  if (absValue >= 1e3) return `${(value / 1e3).toFixed(2)}K`
-  return value.toFixed(2)
+
+  const suffix = scaleLabel || ''
+  return `${value.toFixed(2)}${suffix}`
 }
 
 function FinancialTable({ data }: { data: FinancialData }) {
@@ -57,6 +60,19 @@ function FinancialTable({ data }: { data: FinancialData }) {
 
   return (
     <ScrollArea className="h-[500px]">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span>{data.title}</span>
+        {data.currencySymbol && (
+          <span className="rounded-md border border-border/50 bg-muted/40 px-2 py-1">
+            Currency: {data.currency}
+          </span>
+        )}
+        {data.scaleLabel && (
+          <span className="rounded-md border border-border/50 bg-muted/40 px-2 py-1">
+            Scale: {data.scaleLabel}
+          </span>
+        )}
+      </div>
       <Table>
         <TableHeader>
           <TableRow>
@@ -76,7 +92,10 @@ function FinancialTable({ data }: { data: FinancialData }) {
               </TableCell>
               {data.periods.map((period) => (
                 <TableCell key={period} className="text-right font-mono">
-                  {formatNumber(row[period] as number | null)}
+                  {formatNumber(
+                    (row[`${period}Formatted`] as number | null) ?? null,
+                    data.scaleLabel ?? '',
+                  )}
                 </TableCell>
               ))}
             </TableRow>
