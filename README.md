@@ -169,11 +169,3 @@ The repository includes a `vercel.json` that maps:
 
 - `frontend/` to `/`
 - `backend/main.py` to `/api`
-
-## Future Improvements
-
-- Backtesting engine
-- Real-time streaming pipeline
-- LLM-based stock summaries
-- Export and reporting
-- Sector and factor-based screening
