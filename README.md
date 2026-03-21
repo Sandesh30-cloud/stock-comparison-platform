@@ -21,9 +21,7 @@ StockAnalyzer is a full-stack stock analysis dashboard built with a FastAPI back
 
 ## Demo Video
 
-Watch the project demo here:
-
-[StockAnalyzer Demo Video](https://youtu.be/5ghnGrWl-SA?si=wDY5NcEY-S8k7ASw)
+[![StockAnalyzer Demo Video](https://img.youtube.com/vi/O2Ul6X5dDYQ/maxresdefault.jpg)](https://youtu.be/O2Ul6X5dDYQ)
 
 ## Project Structure
 
